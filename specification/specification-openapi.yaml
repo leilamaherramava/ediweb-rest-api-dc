@@ -1,0 +1,1275 @@
+openapi: 3.0.3
+info:
+  title: DropCat API
+  version: 1.5.0
+  description: REST API для работы с платформой DropCat. Включает управление документами и дополнительные функции.
+
+servers:
+  - url: https://dapi-preprod.ediweb.ru
+    description: Предпродуктивный сервер
+  - url: https://dapi-prod.ediweb.ru
+    description: Продуктивный сервер
+  - url: http://common-api.egw.dropcat.test.lan
+    description: Тестовый сервер
+
+components:
+  securitySchemes:
+    BasicAuth:
+      type: http
+      scheme: basic
+
+security:
+  - BasicAuth: []
+
+paths:
+  /createDocument:
+    post:
+      summary: Создание документа
+      description: Метод позволяет создать новый документ в статусе "Черновик".
+      operationId: createDocument
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id_type
+          in: query
+          description: Тип идентификатора организации (gln или fns).
+          required: true
+          schema:
+            type: string
+            enum: [gln, fns]
+        - name: org_id
+          in: query
+          description: Идентификатор организации-инициатора запроса.
+          required: true
+          schema:
+            type: string
+        - name: org_id_sender
+          in: query
+          description: Идентификатор организации-отправителя.
+          required: true
+          schema:
+            type: string
+        - name: org_id_receiver
+          in: query
+          description: Идентификатор организации-получателя.
+          required: true
+          schema:
+            type: string
+        - name: document_type
+          in: query
+          description: Тип документа.
+          required: true
+          schema:
+            type: string
+            enum:
+              - WAYBILL_T1_ON_PTLSSOBTS
+              - WAYBILL_T2_ON_PTLSPRMO
+              - TRANSPORT_IFTMBF
+        - name: file_name
+          in: query
+          description: Имя файла с расширением.
+          required: true
+          schema:
+            type: string
+        - name: doc_number
+          in: query
+          description: Номер документа в кодировке Base64.
+          required: true
+          schema:
+            type: string
+        - name: doc_date
+          in: query
+          description: Дата создания документа в формате yyyy-MM-dd.
+          schema:
+            type: string
+            format: date
+      requestBody:
+        description: XML-документ в кодировке Base64.
+        required: true
+        content:
+          application/xml:
+            schema:
+              type: string
+      responses:
+        '200':
+          description: Успешное создание документа.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  doc_id:
+                    type: string
+                    description: Уникальный идентификатор документа.
+                  request_uuid:
+                    type: string
+                    description: Уникальный идентификатор запроса.
+        '400':
+          description: Ошибка в запросе. Проверьте параметры и данные.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '500':
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке сервера.
+
+  /deleteDocument:
+    put:
+      summary: Удаление черновика документа
+      description: Удаляет документ в статусе "Черновик".
+      operationId: deleteDocument
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id_type
+          in: query
+          description: Тип идентификатора организации (gln или fns).
+          required: true
+          schema:
+            type: string
+            enum: [gln, fns]
+        - name: org_id
+          in: query
+          description: Идентификатор организации-инициатора запроса.
+          required: true
+          schema:
+            type: string
+        - name: doc_id
+          in: query
+          description: Уникальный идентификатор документа в системе.
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Успешное удаление документа.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "Document '51442005' was deleted."
+        '404':
+          description: Документ не найден или не может быть удален.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '500':
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке сервера.
+                    
+  /createStackDocuments:
+    post:
+      summary: Пакетное создание документов
+      description: Метод позволяет отправить в систему пакет из нескольких документов.
+      operationId: createStackDocuments
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id_type
+          in: query
+          description: Тип идентификатора организации (gln или fns).
+          required: true
+          schema:
+            type: string
+            enum: [gln, fns]
+        - name: org_id
+          in: query
+          description: Идентификатор организации-инициатора запроса.
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: ZIP-архив с XML-документами и описью пакета.
+        required: true
+        content:
+          application/zip:
+            schema:
+              type: string
+              format: binary
+              description: Архив содержит документы и файл `Inventory.xml` с метаинформацией.
+      responses:
+        '200':
+          description: Успешное создание документов.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    documentType:
+                      type: string
+                      description: Тип документа.
+                    fileName:
+                      type: string
+                      description: Имя файла документа.
+                    doc_id:
+                      type: string
+                      description: Уникальный идентификатор созданного документа.
+                    error:
+                      type: string
+                      description: Сообщение об ошибке, если документ не создан.
+        '400':
+          description: Ошибка в запросе. Проверьте параметры и содержимое архива.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '500':
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке сервера.
+                    
+  /getReports/{docId}/{reportFormat}/{templateId}:
+    get:
+      summary: Получение PDF/XLS-файла по шаблону
+      description: Метод позволяет получить файл в формате PDF или XLS, созданный на основе указанного шаблона.
+      operationId: getReports
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: docId
+          in: path
+          description: Идентификатор документа в системе.
+          required: true
+          schema:
+            type: string
+        - name: reportFormat
+          in: path
+          description: Формат отчета.
+          required: true
+          schema:
+            type: string
+            enum: [PDF, XLS]
+        - name: templateId
+          in: path
+          description: Идентификатор шаблона.
+          required: true
+          schema:
+            type: string
+        - name: id_type
+          in: query
+          description: Тип идентификатора организации (gln или fns).
+          required: true
+          schema:
+            type: string
+            enum: [gln, fns]
+        - name: org_id
+          in: query
+          description: Идентификатор организации-инициатора запроса.
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Успешное получение файла.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+                description: Файл в формате PDF или XLS.
+        '400':
+          description: Ошибка запроса. Проверьте параметры.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '404':
+          description: Документ или шаблон не найден.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '500':
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке сервера.
+
+  /generatePrintedForm:
+    get:
+      summary: Формирование печатной формы документа
+      description: Метод позволяет сформировать печатную форму документа с возможностью включения подписей.
+      operationId: generatePrintedForm
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id_type
+          in: query
+          description: Тип идентификатора организации (gln или fns).
+          required: true
+          schema:
+            type: string
+            enum: [gln, fns]
+        - name: org_id
+          in: query
+          description: Идентификатор организации-инициатора запроса.
+          required: true
+          schema:
+            type: string
+        - name: doc_id
+          in: query
+          description: Уникальный идентификатор документа в системе.
+          required: true
+          schema:
+            type: string
+        - name: signed_doc
+          in: query
+          description: Включать ли подписи в печатную форму (true/false).
+          required: true
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Успешное формирование печатной формы.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+                description: Печатная форма в бинарном виде.
+        '400':
+          description: Ошибка в запросе. Проверьте параметры.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '404':
+          description: Документ не найден.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '500':
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке сервера.
+                    
+  /getRequestStatus:
+    get:
+      summary: Получение статуса запроса
+      description: Метод позволяет получить статус выполнения ранее отправленного запроса по его уникальному идентификатору.
+      operationId: getRequestStatus
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id_type
+          in: query
+          description: Тип идентификатора организации (gln или fns).
+          required: true
+          schema:
+            type: string
+            enum: [gln, fns]
+        - name: org_id
+          in: query
+          description: Идентификатор организации-инициатора запроса.
+          required: true
+          schema:
+            type: string
+        - name: request_uuid
+          in: query
+          description: Уникальный идентификатор запроса, статус которого нужно проверить.
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Успешное получение статуса запроса.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    description: Текущий статус запроса (например, `SUCCESS_COMPLETED`).
+                  request:
+                    type: string
+                    description: Тип исходного запроса (например, `createDocument`).
+                  request_uuid:
+                    type: string
+                    description: UUID запроса.
+        '400':
+          description: Ошибка в запросе. Проверьте параметры.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '404':
+          description: Запрос с указанным UUID не найден.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '500':
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке сервера.
+                    
+  /getListDocuments:
+    get:
+      summary: Получение списка документов
+      description: Метод возвращает список документов, соответствующих заданным критериям.
+      operationId: getListDocuments
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id_type
+          in: query
+          description: Тип идентификатора организации (gln или fns).
+          required: true
+          schema:
+            type: string
+            enum: [gln, fns]
+        - name: org_id
+          in: query
+          description: Идентификатор организации-инициатора запроса.
+          required: true
+          schema:
+            type: string
+        - name: document_type
+          in: query
+          description: Тип документа. Возможные значения указаны в документации.
+          required: false
+          schema:
+            type: string
+        - name: sort
+          in: query
+          description: Порядок сортировки.
+          required: false
+          schema:
+            type: string
+            enum: [Ascending, Descending]
+        - name: partner_org_id
+          in: query
+          description: Идентификатор организации партнера.
+          required: false
+          schema:
+            type: string
+        - name: document_subtype
+          in: query
+          description: Подтип документов (например, Incoming, Outgoing, All).
+          required: false
+          schema:
+            type: string
+            enum: [Incoming, Outgoing, All]
+        - name: date_from
+          in: query
+          description: Дата начала периода фильтрации (формат yyyy-MM-dd).
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          description: Дата окончания периода фильтрации (формат yyyy-MM-dd).
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: limit
+          in: query
+          description: Максимальное количество возвращаемых документов. По умолчанию 100.
+          required: false
+          schema:
+            type: integer
+        - name: states
+          in: query
+          description: Список статусов документов через запятую (например, DRAFT,SENT,COMPLETED).
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Успешное получение списка документов.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    document_type:
+                      type: string
+                      description: Тип документа.
+                    doc_id:
+                      type: integer
+                      description: Уникальный идентификатор документа.
+        '400':
+          description: Ошибка в запросе. Проверьте параметры.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '500':
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке сервера.
+                    
+  /getUuids:
+    get:
+      summary: Получение списка UID
+      description: Метод возвращает список уникальных идентификаторов (UID) для организации.
+      operationId: getUuids
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id_type
+          in: query
+          description: Тип идентификатора организации (gln или fns).
+          required: true
+          schema:
+            type: string
+            enum: [gln, fns]
+        - name: org_id
+          in: query
+          description: Идентификатор организации-инициатора запроса.
+          required: true
+          schema:
+            type: string
+        - name: uid_count
+          in: query
+          description: Количество запрашиваемых UID (максимум 300).
+          required: true
+          schema:
+            type: integer
+            maximum: 300
+      responses:
+        '200':
+          description: Успешное получение списка UID.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uids:
+                    type: array
+                    items:
+                      type: string
+                    description: Список уникальных идентификаторов.
+        '400':
+          description: Ошибка в запросе. Проверьте параметры.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '500':
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке сервера.
+  
+  /stackDocuments:
+    get:
+      summary: Получение контента документов (пакетом)
+      description: Метод возвращает контент нескольких документов, указанных в запросе.
+      operationId: stackDocuments
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id_type
+          in: query
+          description: Тип идентификатора организации-инициатора запроса.
+          required: true
+          schema:
+            type: string
+            enum: [gln, fns]
+        - name: org_id
+          in: query
+          description: Идентификатор организации-инициатора.
+          required: true
+          schema:
+            type: string
+        - name: doc_ids
+          in: query
+          description: Список идентификаторов документов, разделенных запятыми.
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Успешное получение контента документов.
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+                description: ZIP-архив с содержимым указанных документов.
+        '400':
+          description: Ошибка в запросе. Проверьте параметры.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '404':
+          description: Один или несколько документов не найдены.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '500':
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке сервера.
+                    
+  /getDocument:
+    get:
+      summary: Получение контента одного документа
+      description: Метод возвращает контент указанного документа в формате, заданном в запросе.
+      operationId: getDocument
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id_type
+          in: query
+          description: Тип идентификатора организации (gln или fns).
+          required: true
+          schema:
+            type: string
+            enum: [gln, fns]
+        - name: org_id
+          in: query
+          description: Идентификатор организации-инициатора запроса
+          required: true
+          schema:
+            type: string
+        - name: doc_id
+          in: query
+          description: Уникальный идентификатор документа.
+          required: true
+          schema:
+            type: string
+        - name: format
+          in: query
+          description: Формат возвращаемого документа (например, XML или Base64).
+          required: true
+          schema:
+            type: string
+            enum: [XML, Base64]
+      responses:
+        '200':
+          description: Успешное получение контента документа.
+          content:
+            application/xml:
+              schema:
+                type: string
+                description: Контент документа в формате XML.
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content:
+                    type: string
+                    description: Контент документа, закодированный в Base64.
+        '400':
+          description: Ошибка в запросе. Проверьте параметры.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '404':
+          description: Документ с указанным идентификатором не найден.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '500':
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке сервера.
+
+  /getQRCode:
+    get:
+      summary: Генерация QR-кода для документа
+      description: Метод позволяет сгенерировать QR-код для документа, который содержит URL с уникальным идентификатором документа.
+      operationId: getQRCode
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id_type
+          in: query
+          description: Тип идентификатора организации (gln или fns).
+          required: true
+          schema:
+            type: string
+            enum: [gln, fns]
+        - name: org_id
+          in: query
+          description: Идентификатор организации-инициатора запроса.
+          required: true
+          schema:
+            type: string
+        - name: doc_id
+          in: query
+          description: Уникальный идентификатор документа, для которого нужно сгенерировать QR-код.
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Успешная генерация QR-кода.
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+                description: Изображение QR-кода в формате PNG.
+        '400':
+          description: Ошибка в запросе. Проверьте параметры.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '404':
+          description: Документ с указанным идентификатором не найден.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '500':
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке сервера.
+                    
+  /getStackQRCode:
+    get:
+      summary: Генерация QR-кода для пакета документов
+      description: Метод позволяет сгенерировать QR-код для пакета документов, содержащий ссылку на пакет с уникальными идентификаторами документов.
+      operationId: getStackQRCode
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id_type
+          in: query
+          description: Тип идентификатора организации.
+          required: true
+          schema:
+            type: string
+            enum: [gln, fns]
+        - name: org_id
+          in: query
+          description: Идентификатор организации-инициатора запроса.
+          required: true
+          schema:
+            type: string
+        - name: stack_id
+          in: query
+          description: Уникальный идентификатор пакета документов, для которого нужно сгенерировать QR-код.
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Успешная генерация QR-кода для пакета документов.
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+                description: Изображение QR-кода для пакета документов в формате PNG.
+        '400':
+          description: Ошибка в запросе. Проверьте параметры.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '404':
+          description: Пакет документов с указанным идентификатором не найден.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '500':
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке сервера.
+                 
+  /getPartners:
+    get:
+      summary: Получение списка партнеров
+      description: Метод позволяет получить список партнерских организаций, доступных для указанной организации.
+      operationId: getPartners
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id_type
+          in: query
+          description: Тип идентификатора организации.
+          required: true
+          schema:
+            type: string
+            enum: [gln, fns]
+        - name: org_id
+          in: query
+          description: Идентификатор организации-инициатора запроса.
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Ограничение на количество возвращаемых партнеров (по умолчанию 100).
+          required: false
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: Успешное получение списка партнеров.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    partner_id:
+                      type: string
+                      description: Уникальный идентификатор партнера.
+                    partner_name:
+                      type: string
+                      description: Название партнера.
+                    partner_type:
+                      type: string
+                      description: Тип партнера.
+        '400':
+          description: Ошибка в запросе. Проверьте параметры.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '500':
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке сервера.
+                 
+  /getStackDocumentStates:
+    get:
+      summary: Получение состояния документов в пакете
+      description: Метод возвращает состояния всех документов в пакете по уникальному идентификатору пакета.
+      operationId: getStackDocumentStates
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id_type
+          in: query
+          description: Тип идентификатора организации (gln или fns).
+          required: true
+          schema:
+            type: string
+            enum: [gln, fns]
+        - name: org_id
+          in: query
+          description: Идентификатор организации-инициатора запроса.
+          required: true
+          schema:
+            type: string
+        - name: stack_id
+          in: query
+          description: Уникальный идентификатор пакета документов.
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Успешное получение состояния документов в пакете.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stack_id:
+                    type: string
+                    description: Уникальный идентификатор пакета.
+                  documents:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        doc_id:
+                          type: string
+                          description: Уникальный идентификатор документа в пакете.
+                        status:
+                          type: string
+                          description: Статус документа (например, `DRAFT`, `COMPLETED`).
+        '400':
+          description: Ошибка в запросе. Проверьте параметры.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '404':
+          description: Пакет документов с указанным идентификатором не найден.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '500':
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке сервера.
+                    
+  /getDocumentStates:
+    get:
+      summary: Получение состояния документа
+      description: Метод возвращает текущее состояние указанного документа.
+      operationId: getDocumentStates
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id_type
+          in: query
+          description: Тип идентификатора организации.
+          required: true
+          schema:
+            type: string
+            enum: [gln, fns]
+        - name: org_id
+          in: query
+          description: Идентификатор организации-инициатора запроса.
+          required: true
+          schema:
+            type: string
+        - name: doc_id
+          in: query
+          description: Уникальный идентификатор документа, для которого нужно получить состояние.
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Успешное получение состояния документа.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  doc_id:
+                    type: string
+                    description: Уникальный идентификатор документа.
+                  status:
+                    type: string
+                    description: Текущее состояние документа (например, `DRAFT`, `COMPLETED`).
+        '400':
+          description: Ошибка в запросе. Проверьте параметры.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '404':
+          description: Документ с указанным идентификатором не найден.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '500':
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке сервера.
+   
+  /getStackDocumentArchives:
+    get:
+      summary: Получение архивов документов в пакете
+      description: Метод возвращает архивы всех документов в пакете по уникальному идентификатору пакета.
+      operationId: getStackDocumentArchives
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id_type
+          in: query
+          description: Тип идентификатора организации.
+          required: true
+          schema:
+            type: string
+            enum: [gln, fns]
+        - name: org_id
+          in: query
+          description: Идентификатор организации-инициатора запроса.
+          required: true
+          schema:
+            type: string
+        - name: stack_id
+          in: query
+          description: Уникальный идентификатор пакета документов, архивы которых нужно получить.
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Успешное получение архивов документов в пакете.
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+                description: ZIP-архив, содержащий все документы в пакете.
+        '400':
+          description: Ошибка в запросе. Проверьте параметры.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '404':
+          description: Пакет документов с указанным идентификатором не найден.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке.
+        '500':
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Сообщение об ошибке сервера.
+  
+  /updateDocument:
+    put:
+      summary: Обновление документа
+      description: Метод позволяет обновить данные документа по уникальному идентификатору.
+      operationId: updateDocument
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id_type
+          in: query
+          description: Тип идентификатора организации.
+          required: true
+          schema:
+            type: string
+            enum: [gln, fns]
+        - name: org_id
+          in: query
+          description: Идентификатор организации-инициатора запроса.
+          required: true
+          schema:
+            type: string
+        - name: doc_id
+          in: query
+          description: Уникальный идентификатор документа, который нужно обновить.
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: Новый XML-документ в кодировке Base64.
+        required: true
+        content:
+          application/xml:
+            schema:
+              type: string
+      responses:
+        '200':
+          description: Успешное обновление документа.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  doc_id:
+                    type: string
+                    description: Уникальный идентификатор обновленного документа.
+        '400':
+          description: Ошибка в запросе. Проверьте параметры.
+        '404':
+          description: Документ не найден.
+        '500':
+          description: Внутренняя ошибка сервера.
